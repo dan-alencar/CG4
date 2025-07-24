@@ -1,0 +1,32 @@
+{
+  "name": "cg4",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dan-alencar/CG4.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/dan-alencar/CG4/issues"
+  },
+  "homepage": "https://github.com/dan-alencar/CG4#readme",
+  "dependencies": {
+    "@dimforge/rapier3d": "^0.18.0",
+    "three": "^0.178.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-basic-ssl": "^2.1.0",
+    "vite": "^7.0.5",
+    "vite-plugin-wasm": "^3.5.0"
+  }
+}
