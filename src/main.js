@@ -1,91 +1,82 @@
 // src/main.js
 import * as THREE from 'three';
-import { createScene } from './scene.js'; // Import our scene creation function
-import { getRapier, initPhysicsFloor, addPhysicsSphere, updatePhysics } from './physics.js';
+import { createScene } from './scene.js';
+import { getRapier, initPhysicsFloor, addPhysicsSphere, updatePhysics, physicsObjects } from './physics.js';
 
 let scene, camera, renderer;
-let sphere; // Keep a reference to the cube if you want to animate it
-let sphere1;
+let marble;
 let lastTime = 0;
 
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
-let selectedObject = null;
-let originalMaterial = null;
+let pickedMarble = null;
+let pickedMarbleRigidBody = null;
+let originalMarbleMaterial = null;
 
-async function init() {
+let RAPIER_LOADED = null; // Declare a local variable to hold the RAPIER module once loaded
 
-    await getRapier(); // This pauses execution until Rapier is ready
+async function initializeApp() {
+    RAPIER_LOADED = await getRapier(); // Assign the loaded RAPIER module here
 
-    // --- 1. Renderer setup (Needs to be first if you use it for background texture, but okay here) ---
+    // --- Renderer setup ---
     const canvas = document.getElementById('webgl-canvas');
     renderer = new THREE.WebGLRenderer({ antialias: true, canvas: canvas });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true; // Enable shadow maps on the renderer
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Optional: for softer shadows
-    // renderer.outputColorSpace = THREE.SRGBColorSpace;
-    // renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    // renderer.toneMappingExposure = 1.0;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
 
-    // --- 2. Scene setup ---
-    scene = createScene(); // Use our function to create and configure the scene
-    initPhysicsFloor();
-    // --- 3. Camera setup ---
+    // --- Scene setup ---
+    scene = createScene();
+
+    // --- Camera setup ---
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 2, 5); // Slightly lift the camera and move it back
-    camera.lookAt(0, 0, 0); // Make camera look at the origin
+    camera.position.set(5, 5, 10);
+    camera.lookAt(0, 0, 0);
 
-    // --- Add your test cube again (make it cast shadows) ---
-    const radius = 0.25;
-    const geometry = new THREE.SphereGeometry(radius, 16, 16);
-    const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 }); // Use StandardMaterial for lighting
-    sphere = new THREE.Mesh(geometry, material); // Assign to 'cube' variable
-    sphere.position.y = 1.5; // Lift it above the floor
-    sphere.castShadow = true; // Make the sphere cast shadows
-    scene.add(sphere);
-    const geometry1 = new THREE.SphereGeometry(radius, 16, 16);
-    const material1 = new THREE.MeshStandardMaterial({ color: 0x00ff00 }); // Use StandardMaterial for lighting
-    sphere1 = new THREE.Mesh(geometry1, material1); // Assign to 'cube' variable
-    sphere1.position.x = 1.5; // Lift it above the floor
-    sphere1.position.y = 1.5; // Lift it above the floor
-    sphere1.castShadow = true; // Make the sphere cast shadows
-    scene.add(sphere1);
+    initPhysicsFloor();
 
-    // --- Add a simple light for now so we can see the floor and cube correctly ---
-    //const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // Soft white light
-    //scene.add(ambientLight);
-    addPhysicsSphere(sphere, radius); //adiciona física a uma esfera (testando com cubo, ta errado)
-    addPhysicsSphere(sphere1, radius); 
+    // --- Create a single marble ---
+    const marbleGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+    const marbleMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff00, roughness: 0.8 });
+    marble = new THREE.Mesh(marbleGeometry, marbleMaterial);
+    marble.position.y = 5;
+    marble.castShadow = true;
+    scene.add(marble);
+    addPhysicsSphere(marble, 0.5);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1); // White directional light
-    directionalLight.position.set(5, 10, 5); // Position the light
-    directionalLight.castShadow = true; // Make the light cast shadows
+    // --- Lights ---
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    directionalLight.position.set(10, 10, 10);
+    directionalLight.castShadow = true;
     scene.add(directionalLight);
-    directionalLight.target.position.set(sphere.position.x, sphere.position.y, sphere.position.z);
-    scene.add(directionalLight.target);
 
-    // Configure shadow properties for the directional light
     directionalLight.shadow.mapSize.width = 2048;
     directionalLight.shadow.mapSize.height = 2048;
-    directionalLight.shadow.camera.near = 0.5;
-    directionalLight.shadow.camera.far = 20;
-    directionalLight.shadow.camera.left = -7;
-    directionalLight.shadow.camera.right = 7;
-    directionalLight.shadow.camera.top = 7;
-    directionalLight.shadow.camera.bottom = -7;
-    directionalLight.shadow.bias = -0.001; // Prevents light leaking
-    directionalLight.shadow.normalBias = 0.02; // Prevents shadow acne on flat surfaces
-    // Optional: Add a helper to visualize the light's shadow camera frustum
-     const helper = new THREE.CameraHelper( directionalLight.shadow.camera );
-     scene.add( helper );
+    directionalLight.shadow.camera.near = 0.1;
+    directionalLight.shadow.camera.far = 100;
+    directionalLight.shadow.camera.left = -20;
+    directionalLight.shadow.camera.right = 20;
+    directionalLight.shadow.camera.top = 20;
+    directionalLight.shadow.camera.bottom = -20;
+    directionalLight.shadow.bias = -0.001;
+    directionalLight.shadow.normalBias = 0.02;
 
+    const helper = new THREE.CameraHelper(directionalLight.shadow.camera);
+    scene.add(helper);
 
     // --- Event Listeners ---
     window.addEventListener('resize', onWindowResize, false);
     window.addEventListener('click', onMouseClick, false);
+    window.addEventListener('keydown', onKeyDown, false);
 
-    // --- Start Animation ---
+    // --- Start Animation Loop ---
     animate(0);
 }
 
@@ -96,10 +87,63 @@ function onWindowResize() {
 }
 
 function onMouseClick(event) {
+    if (pickedMarble) {
+        pickedMarble.material = originalMarbleMaterial;
+        pickedMarbleRigidBody.setEnabled(true, true);
+        pickedMarble = null;
+        pickedMarbleRigidBody = null;
+        console.log("Marble deselected (dropped).");
+        return;
+    }
+
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
     raycaster.setFromCamera(mouse, camera);
+
+    const interactableMeshes = physicsObjects.map(obj => obj.mesh);
+    const intersects = raycaster.intersectObjects(interactableMeshes, false);
+
+    if (intersects.length > 0) {
+        const intersectedMesh = intersects[0].object;
+        const physicsObj = physicsObjects.find(obj => obj.mesh === intersectedMesh);
+
+        if (physicsObj) {
+            pickedMarble = intersectedMesh;
+            pickedMarbleRigidBody = physicsObj.rigidBody;
+            originalMarbleMaterial = pickedMarble.material;
+
+            pickedMarble.material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+            pickedMarbleRigidBody.setEnabled(false, false);
+            console.log('Marble picked:', pickedMarble.uuid);
+        }
+    }
+}
+
+function onKeyDown(event) {
+    // Use the locally stored RAPIER_LOADED variable
+    if (event.code === 'Space' && pickedMarble && pickedMarbleRigidBody && RAPIER_LOADED) {
+        console.log("Attempting to throw marble...");
+        const throwStrength = 15;
+
+        const throwDirection = new THREE.Vector3();
+        camera.getWorldDirection(throwDirection);
+
+        // Use RAPIER_LOADED.Vector3 instead of window.RAPIER.Vector3
+        const rapierThrowVector = new RAPIER_LOADED.Vector3( // <--- HERE IS THE FIX
+            throwDirection.x * throwStrength,
+            throwDirection.y * throwStrength,
+            throwDirection.z * throwStrength
+        );
+
+        pickedMarbleRigidBody.setEnabled(true, true);
+        pickedMarbleRigidBody.applyImpulse(rapierThrowVector, true);
+
+        pickedMarble.material = originalMarbleMaterial;
+        pickedMarble = null;
+        pickedMarbleRigidBody = null;
+        console.log("Marble thrown!");
+    }
 }
 
 function animate(time) {
@@ -108,10 +152,16 @@ function animate(time) {
     const deltaTime = (time - lastTime) / 1000;
     lastTime = time;
 
+    // Optional: Keep picked marble in front of camera
+    if (pickedMarble && pickedMarbleRigidBody && !pickedMarbleRigidBody.isEnabled()) {
+        const cameraForward = new THREE.Vector3();
+        camera.getWorldDirection(cameraForward);
+        pickedMarble.position.copy(camera.position).add(cameraForward.multiplyScalar(2));
+    }
+
     updatePhysics();
 
     renderer.render(scene, camera);
 }
 
-// Initialize the scene when the window loads
-window.addEventListener('DOMContentLoaded', init);
+window.addEventListener('DOMContentLoaded', initializeApp);
